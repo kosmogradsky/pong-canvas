@@ -1,4 +1,4 @@
-import { merge } from "rxjs";
+import { merge, interval, animationFrameScheduler } from "rxjs";
 import { scan, map } from "rxjs/operators";
 import * as Paddle from "./Paddle";
 
@@ -37,14 +37,24 @@ const initialState: State = {
 
 const leftPaddle = Paddle.createInstance({
   upKey: "KeyW",
-  downKey: "KeyS"
+  downKey: "KeyS",
+  canvasHeight: height
 });
 const rightPaddle = Paddle.createInstance({
   upKey: "ArrowUp",
-  downKey: "ArrowDown"
+  downKey: "ArrowDown",
+  canvasHeight: height
 });
 
+const tick$ = interval(0, animationFrameScheduler).pipe(
+  map(() => (prevState: State): State => ({
+    left: leftPaddle.tickReducer(prevState.left),
+    right: rightPaddle.tickReducer(prevState.right)
+  }))
+);
+
 merge(
+  tick$,
   leftPaddle.reducer$.pipe(
     map(reducer => (prevState: State): State => ({
       ...prevState,

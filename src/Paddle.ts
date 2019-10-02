@@ -16,10 +16,12 @@ const paddleHeight = 100;
 
 export const createInstance = ({
   upKey,
-  downKey
+  downKey,
+  canvasHeight
 }: {
   upKey: string;
   downKey: string;
+  canvasHeight: number;
 }) => {
   const goUp$ = fromEvent<KeyboardEvent>(document, "keydown").pipe(
     filter(event => event.code === upKey && event.repeat === false),
@@ -32,15 +34,17 @@ export const createInstance = ({
   );
 
   const stop$ = fromEvent<KeyboardEvent>(document, "keyup").pipe(
+    filter(event => event.code === upKey || event.code === downKey),
     map(() => (prevState: State): State => ({ ...prevState, velocity: 0 }))
   );
 
-  const tick$ = interval(0, animationFrameScheduler).pipe(
-    map(() => (prevState: State): State => ({
-      ...prevState,
-      y: prevState.velocity + prevState.y
-    }))
-  );
+  const tickReducer = (prevState: State): State => ({
+    ...prevState,
+    y: Math.min(
+      Math.max(10, prevState.velocity + prevState.y),
+      canvasHeight - paddleHeight - 10
+    )
+  });
 
   const render = ({
     state,
@@ -56,7 +60,8 @@ export const createInstance = ({
   };
 
   return {
-    reducer$: merge(goUp$, goDown$, stop$, tick$),
+    reducer$: merge(goUp$, goDown$, stop$),
+    tickReducer,
     render
   };
 };
