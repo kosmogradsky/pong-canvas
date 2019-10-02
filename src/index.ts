@@ -1,5 +1,6 @@
-import { fromEvent, merge, interval, animationFrameScheduler } from "rxjs";
-import { map, filter, scan } from "rxjs/operators";
+import { merge } from "rxjs";
+import { scan, map } from "rxjs/operators";
+import * as Paddle from "./Paddle";
 
 // INIT
 
@@ -25,46 +26,47 @@ ctx.scale(pixelRatio, pixelRatio);
 // EVENTS
 
 interface State {
-  velocity: number;
-  y: number;
+  left: Paddle.State;
+  right: Paddle.State;
 }
 
 const initialState: State = {
-  velocity: 0,
-  y: 30
+  left: Paddle.initialState,
+  right: Paddle.initialState
 };
 
-const goUp$ = fromEvent<KeyboardEvent>(document, "keydown").pipe(
-  filter(event => event.key === "ArrowUp" && event.repeat === false),
-  map(() => (prevState: State): State => ({ ...prevState, velocity: -5 }))
-);
+const leftPaddle = Paddle.createInstance({
+  upKey: "KeyW",
+  downKey: "KeyS"
+});
+const rightPaddle = Paddle.createInstance({
+  upKey: "ArrowUp",
+  downKey: "ArrowDown"
+});
 
-const goDown$ = fromEvent<KeyboardEvent>(document, "keydown").pipe(
-  filter(event => event.key === "ArrowDown" && event.repeat === false),
-  map(() => (prevState: State): State => ({ ...prevState, velocity: 5 }))
-);
-
-const stop$ = fromEvent<KeyboardEvent>(document, "keyup").pipe(
-  map(() => (prevState: State): State => ({ ...prevState, velocity: 0 }))
-);
-
-const tick$ = interval(0, animationFrameScheduler).pipe(
-  map(() => (prevState: State): State => ({
-    ...prevState,
-    y: prevState.velocity + prevState.y
-  }))
-);
-
-merge(goUp$, goDown$, stop$, tick$)
+merge(
+  leftPaddle.reducer$.pipe(
+    map(reducer => (prevState: State): State => ({
+      ...prevState,
+      left: reducer(prevState.left)
+    }))
+  ),
+  rightPaddle.reducer$.pipe(
+    map(reducer => (prevState: State): State => ({
+      ...prevState,
+      right: reducer(prevState.right)
+    }))
+  )
+)
   .pipe(scan((acc, reducer) => reducer(acc), initialState))
   .subscribe(state => {
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, width, height);
 
-    ctx.fillStyle = "white";
-
-    const paddleWidth = 20;
-    const paddleHeight = 100;
-    ctx.fillRect(20, state.y, paddleWidth, paddleHeight);
-    ctx.fillRect(width - paddleWidth - 20, state.y, paddleWidth, paddleHeight);
+    leftPaddle.render({ ctx, x: 20, state: state.left });
+    rightPaddle.render({
+      ctx,
+      x: width - Paddle.paddleWidth - 20,
+      state: state.right
+    });
   });
