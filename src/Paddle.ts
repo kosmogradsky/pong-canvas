@@ -1,5 +1,6 @@
-import { fromEvent, interval, animationFrameScheduler, merge } from "rxjs";
+import { merge, Observable } from "rxjs";
 import { filter, map } from "rxjs/operators";
+import { Frame } from "./Frame";
 
 export interface State {
   velocity: number;
@@ -12,36 +13,44 @@ export const initialState: State = {
 };
 
 export const paddleWidth = 20;
-const paddleHeight = 100;
+export const paddleHeight = 100;
+const paddleSpeed = 350;
 
 export const createInstance = ({
-  upKey,
-  downKey,
+  keyUp$,
+  keyDown$,
+  keyRelease$,
   canvasHeight
 }: {
-  upKey: string;
-  downKey: string;
+  keyUp$: Observable<KeyboardEvent>;
+  keyDown$: Observable<KeyboardEvent>;
+  keyRelease$: Observable<KeyboardEvent>;
   canvasHeight: number;
 }) => {
-  const goUp$ = fromEvent<KeyboardEvent>(document, "keydown").pipe(
-    filter(event => event.code === upKey && event.repeat === false),
-    map(() => (prevState: State): State => ({ ...prevState, velocity: -5 }))
+  const goUp$ = keyUp$.pipe(
+    filter(event => event.repeat === false),
+    map(() => (prevState: State): State => ({
+      ...prevState,
+      velocity: -paddleSpeed
+    }))
   );
 
-  const goDown$ = fromEvent<KeyboardEvent>(document, "keydown").pipe(
-    filter(event => event.code === downKey && event.repeat === false),
-    map(() => (prevState: State): State => ({ ...prevState, velocity: 5 }))
+  const goDown$ = keyDown$.pipe(
+    filter(event => event.repeat === false),
+    map(() => (prevState: State): State => ({
+      ...prevState,
+      velocity: paddleSpeed
+    }))
   );
 
-  const stop$ = fromEvent<KeyboardEvent>(document, "keyup").pipe(
-    filter(event => event.code === upKey || event.code === downKey),
+  const stop$ = keyRelease$.pipe(
     map(() => (prevState: State): State => ({ ...prevState, velocity: 0 }))
   );
 
-  const tickReducer = (prevState: State): State => ({
+  const tickReducer = (prevState: State, frame: Frame): State => ({
     ...prevState,
     y: Math.min(
-      Math.max(10, prevState.velocity + prevState.y),
+      Math.max(10, (frame.deltaTime / 1000) * prevState.velocity + prevState.y),
       canvasHeight - paddleHeight - 10
     )
   });

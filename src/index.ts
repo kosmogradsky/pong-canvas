@@ -1,15 +1,21 @@
-import { merge, interval, animationFrameScheduler } from "rxjs";
-import { scan, map } from "rxjs/operators";
+import { merge, fromEvent, Observable } from "rxjs";
+import { scan, map, filter } from "rxjs/operators";
 import * as Paddle from "./Paddle";
+import * as Ball from "./Ball";
+import { frame$ } from "./Frame";
+
+// CONSTANTS
+
+const width = 1000;
+const height = 700;
+const leftPaddleX = 20;
+const rightPaddleX = width - Paddle.paddleWidth - 20;
 
 // INIT
 
 const canvas = document.createElement("canvas");
 
 document.body.prepend(canvas);
-
-const width = 1000;
-const height = 700;
 
 const pixelRatio = window.devicePixelRatio || 1;
 
@@ -19,7 +25,7 @@ canvas.height = height * pixelRatio;
 canvas.style.width = width + "px";
 canvas.style.height = height + "px";
 
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d")!;
 
 ctx.scale(pixelRatio, pixelRatio);
 
@@ -28,33 +34,93 @@ ctx.scale(pixelRatio, pixelRatio);
 interface State {
   left: Paddle.State;
   right: Paddle.State;
+  ball: Ball.State;
 }
+
+const leftPaddle = Paddle.createInstance({
+  keyUp$: fromEvent<KeyboardEvent>(document, "keydown").pipe(
+    filter(event => event.code === "KeyW")
+  ),
+  keyDown$: fromEvent<KeyboardEvent>(document, "keydown").pipe(
+    filter(event => event.code === "KeyS")
+  ),
+  keyRelease$: fromEvent<KeyboardEvent>(document, "keyup").pipe(
+    filter(event => event.code === "KeyW" || event.code === "KeyS")
+  ),
+  canvasHeight: height
+});
+
+const rightPaddle = Paddle.createInstance({
+  keyUp$: fromEvent<KeyboardEvent>(document, "keydown").pipe(
+    filter(event => event.code === "ArrowUp")
+  ),
+  keyDown$: fromEvent<KeyboardEvent>(document, "keydown").pipe(
+    filter(event => event.code === "ArrowDown")
+  ),
+  keyRelease$: fromEvent<KeyboardEvent>(document, "keyup").pipe(
+    filter(event => event.code === "ArrowUp" || event.code === "ArrowDown")
+  ),
+  canvasHeight: height
+});
+
+const ball = Ball.createInstance({
+  start$: fromEvent<KeyboardEvent>(document, "keydown").pipe(
+    filter(event => event.code === "Enter")
+  ),
+  canvasHeight: height,
+  canvasWidth: width
+});
 
 const initialState: State = {
   left: Paddle.initialState,
-  right: Paddle.initialState
+  right: Paddle.initialState,
+  ball: ball.initialState
 };
 
-const leftPaddle = Paddle.createInstance({
-  upKey: "KeyW",
-  downKey: "KeyS",
-  canvasHeight: height
-});
-const rightPaddle = Paddle.createInstance({
-  upKey: "ArrowUp",
-  downKey: "ArrowDown",
-  canvasHeight: height
-});
+const tick$ = frame$.pipe(
+  map(frame => (prevState: State): State => {
+    const getBallState = () => {
+      const isCollidingVertically = (paddle: Paddle.State) => {
+        return (
+          prevState.ball.y < paddle.y + Paddle.paddleHeight ||
+          paddle.y < prevState.ball.y + Ball.ballSize
+        );
+      };
 
-const tick$ = interval(0, animationFrameScheduler).pipe(
-  map(() => (prevState: State): State => ({
-    left: leftPaddle.tickReducer(prevState.left),
-    right: rightPaddle.tickReducer(prevState.right)
-  }))
+      if (
+        prevState.ball.x + Ball.ballSize > rightPaddleX &&
+        isCollidingVertically(prevState.right)
+      ) {
+        return {
+          ...prevState.ball,
+          vx: -prevState.ball.vx * 1.03,
+          x: rightPaddleX - Ball.ballSize
+        };
+      }
+
+      if (
+        prevState.ball.x < leftPaddleX + Paddle.paddleWidth &&
+        isCollidingVertically(prevState.left)
+      ) {
+        return {
+          ...prevState.ball,
+          vx: -prevState.ball.vx * 1.03,
+          x: leftPaddleX + Paddle.paddleWidth
+        };
+      }
+
+      return ball.tickReducer(prevState.ball, frame);
+    };
+
+    return {
+      left: leftPaddle.tickReducer(prevState.left, frame),
+      right: rightPaddle.tickReducer(prevState.right, frame),
+      ball: getBallState()
+    };
+  })
 );
 
-merge(
-  tick$,
+const interaction$ = merge(
   leftPaddle.reducer$.pipe(
     map(reducer => (prevState: State): State => ({
       ...prevState,
@@ -66,17 +132,32 @@ merge(
       ...prevState,
       right: reducer(prevState.right)
     }))
+  ),
+  ball.reducer$.pipe(
+    map(reducer => (prevState: State): State => ({
+      ...prevState,
+      ball: reducer(prevState.ball)
+    }))
   )
-)
-  .pipe(scan((acc, reducer) => reducer(acc), initialState))
-  .subscribe(state => {
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, width, height);
+);
 
-    leftPaddle.render({ ctx, x: 20, state: state.left });
-    rightPaddle.render({
-      ctx,
-      x: width - Paddle.paddleWidth - 20,
-      state: state.right
-    });
+let state = initialState;
+
+interaction$.subscribe(reducer => {
+  state = reducer(state);
+});
+
+tick$.subscribe(reducer => {
+  state = reducer(state);
+
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, width, height);
+
+  leftPaddle.render({ ctx, x: leftPaddleX, state: state.left });
+  rightPaddle.render({
+    ctx,
+    x: rightPaddleX,
+    state: state.right
   });
+  ball.render({ ctx, state: state.ball });
+});
