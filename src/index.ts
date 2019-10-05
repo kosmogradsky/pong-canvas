@@ -79,11 +79,11 @@ const initialState: State = {
 
 const tick$ = frame$.pipe(
   map(frame => (prevState: State): State => {
-    const getBallState = () => {
+    const getBallState = (): Ball.State => {
       const isCollidingVertically = (paddle: Paddle.State) => {
         return (
-          prevState.ball.y < paddle.y + Paddle.paddleHeight ||
-          paddle.y < prevState.ball.y + Ball.ballSize
+          prevState.ball.y + Ball.ballSize > paddle.y &&
+          prevState.ball.y < paddle.y + Paddle.paddleHeight
         );
       };
 
@@ -93,6 +93,7 @@ const tick$ = frame$.pipe(
       ) {
         return {
           ...prevState.ball,
+          vy: prevState.ball.vy * Math.random() * 2,
           vx: -prevState.ball.vx * 1.03,
           x: rightPaddleX - Ball.ballSize
         };
@@ -104,8 +105,25 @@ const tick$ = frame$.pipe(
       ) {
         return {
           ...prevState.ball,
+          vy: prevState.ball.vy * Math.random() * 2,
           vx: -prevState.ball.vx * 1.03,
           x: leftPaddleX + Paddle.paddleWidth
+        };
+      }
+
+      if (prevState.ball.y < 0) {
+        return {
+          ...prevState.ball,
+          vy: -prevState.ball.vy,
+          y: 0
+        };
+      }
+
+      if (prevState.ball.y > height - Ball.ballSize) {
+        return {
+          ...prevState.ball,
+          vy: -prevState.ball.vy,
+          y: height - Ball.ballSize
         };
       }
 

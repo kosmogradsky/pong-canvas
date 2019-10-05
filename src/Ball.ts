@@ -31,8 +31,8 @@ export const createInstance = ({
     map(() => (prevState: State): State => ({
       x: canvasWidth / 2 - ballSize / 2,
       y: canvasHeight / 2 - ballSize / 2,
-      vx: Math.ceil(Math.random() * 2) == 1 ? -200 : 200,
-      vy: Math.floor(Math.random() * 200) - 100
+      vx: Math.ceil(Math.random() * 2) == 1 ? -300 : 300,
+      vy: Math.floor(Math.random() * 400) + 100
     }))
   );
 
