@@ -7,11 +7,6 @@ export interface State {
   y: number;
 }
 
-export const initialState: State = {
-  velocity: 0,
-  y: 30
-};
-
 export const paddleWidth = 20;
 export const paddleHeight = 100;
 const paddleSpeed = 350;
@@ -27,6 +22,11 @@ export const createInstance = ({
   keyRelease$: Observable<KeyboardEvent>;
   canvasHeight: number;
 }) => {
+  const initialState: State = {
+    velocity: 0,
+    y: canvasHeight / 2 - paddleHeight / 2
+  };
+
   const goUp$ = keyUp$.pipe(
     filter(event => event.repeat === false),
     map(() => (prevState: State): State => ({
@@ -69,6 +69,7 @@ export const createInstance = ({
   };
 
   return {
+    initialState,
     reducer$: merge(goUp$, goDown$, stop$),
     tickReducer,
     render

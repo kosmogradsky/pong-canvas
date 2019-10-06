@@ -72,8 +72,8 @@ const ball = Ball.createInstance({
 });
 
 const initialState: State = {
-  left: Paddle.initialState,
-  right: Paddle.initialState,
+  left: leftPaddle.initialState,
+  right: rightPaddle.initialState,
   ball: ball.initialState
 };
 
@@ -93,7 +93,7 @@ const tick$ = frame$.pipe(
       ) {
         return {
           ...prevState.ball,
-          vy: prevState.ball.vy * Math.random() * 2,
+          vy: Ball.getVerticalSpeed(),
           vx: -prevState.ball.vx * 1.03,
           x: rightPaddleX - Ball.ballSize
         };
@@ -105,7 +105,7 @@ const tick$ = frame$.pipe(
       ) {
         return {
           ...prevState.ball,
-          vy: prevState.ball.vy * Math.random() * 2,
+          vy: Ball.getVerticalSpeed(),
           vx: -prevState.ball.vx * 1.03,
           x: leftPaddleX + Paddle.paddleWidth
         };
@@ -124,6 +124,24 @@ const tick$ = frame$.pipe(
           ...prevState.ball,
           vy: -prevState.ball.vy,
           y: height - Ball.ballSize
+        };
+      }
+
+      if (prevState.ball.x < 0) {
+        return {
+          vx: Ball.horizontalSpeedThreshold,
+          vy: Ball.getVerticalSpeed(),
+          x: leftPaddleX + Paddle.paddleWidth,
+          y: prevState.left.y + Paddle.paddleHeight / 2 - Ball.ballSize / 2
+        };
+      }
+
+      if (prevState.ball.x + Ball.ballSize > width) {
+        return {
+          vx: -Ball.horizontalSpeedThreshold,
+          vy: Ball.getVerticalSpeed(),
+          x: rightPaddleX - Ball.ballSize,
+          y: prevState.right.y + Paddle.paddleHeight / 2 - Ball.ballSize / 2
         };
       }
 

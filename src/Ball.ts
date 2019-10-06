@@ -10,6 +10,12 @@ export interface State {
 }
 
 export const ballSize = 20;
+export const horizontalSpeedThreshold = 300;
+export const getVerticalSpeed = () => Math.floor(Math.random() * 500) - 250;
+export const getHorizontalSpeed = () =>
+  Math.ceil(Math.random() * 2) == 1
+    ? -horizontalSpeedThreshold
+    : horizontalSpeedThreshold;
 
 export const createInstance = ({
   start$,
@@ -31,8 +37,8 @@ export const createInstance = ({
     map(() => (prevState: State): State => ({
       x: canvasWidth / 2 - ballSize / 2,
       y: canvasHeight / 2 - ballSize / 2,
-      vx: Math.ceil(Math.random() * 2) == 1 ? -300 : 300,
-      vy: Math.floor(Math.random() * 400) + 100
+      vx: getHorizontalSpeed(),
+      vy: getVerticalSpeed()
     }))
   );
 
