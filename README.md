@@ -1,15 +1,5 @@
-# 🚀 Welcome to your new awesome project!
+# Pong
 
-This project has been created using **webpack scaffold**, you can now run
+A pong game based on Canvas and RxJS with fully immutable state.
 
-```
-npm run build
-```
-
-or
-
-```
-yarn build
-```
-
-to bundle your application
+Inspired by [GD50 Pong lecture](https://www.youtube.com/watch?v=GfwpRU0cT10).
