@@ -18,29 +18,25 @@ export const getHorizontalSpeed = () =>
     : horizontalSpeedThreshold;
 
 export const createInstance = ({
-  start$,
   canvasWidth,
   canvasHeight
 }: {
-  start$: Observable<unknown>;
   canvasHeight: number;
   canvasWidth: number;
 }) => {
-  const initialState: State = {
+  const stillState: State = {
     x: canvasWidth / 2 - ballSize / 2,
     y: canvasHeight / 2 - ballSize / 2,
     vx: 0,
     vy: 0
   };
 
-  const headstart$ = start$.pipe(
-    map(() => (prevState: State): State => ({
-      x: canvasWidth / 2 - ballSize / 2,
-      y: canvasHeight / 2 - ballSize / 2,
-      vx: getHorizontalSpeed(),
-      vy: getVerticalSpeed()
-    }))
-  );
+  const getInitialMovingState = (): State => ({
+    x: canvasWidth / 2 - ballSize / 2,
+    y: canvasHeight / 2 - ballSize / 2,
+    vx: getHorizontalSpeed(),
+    vy: getVerticalSpeed()
+  });
 
   const tickReducer = (prevState: State, frame: Frame): State => ({
     ...prevState,
@@ -60,8 +56,8 @@ export const createInstance = ({
   };
 
   return {
-    initialState,
-    reducer$: headstart$,
+    stillState,
+    getInitialMovingState,
     tickReducer,
     render
   };
