@@ -1,6 +1,4 @@
-import { Observable } from "rxjs";
-import { map } from "rxjs/operators";
-import { Frame } from "./Frame";
+import { TickReducer, Tick, EMPTY } from "sudetenwaltz/Loop";
 
 export interface State {
   x: number;
@@ -17,48 +15,57 @@ export const getHorizontalSpeed = () =>
     ? -horizontalSpeedThreshold
     : horizontalSpeedThreshold;
 
-export const createInstance = ({
-  canvasWidth,
-  canvasHeight
+// INITIAL STATES
+
+export const getInitialStillState = (
+  canvasHeight: number,
+  canvasWidth: number
+): State => ({
+  x: canvasWidth / 2 - ballSize / 2,
+  y: canvasHeight / 2 - ballSize / 2,
+  vx: 0,
+  vy: 0
+});
+
+export const getInitialMovingState = (
+  canvasHeight: number,
+  canvasWidth: number
+): State => ({
+  x: canvasWidth / 2 - ballSize / 2,
+  y: canvasHeight / 2 - ballSize / 2,
+  vx: getHorizontalSpeed(),
+  vy: getVerticalSpeed()
+});
+
+// ACTIONS
+
+export type Action = never;
+
+// REDUCER
+
+export const reducer: TickReducer<State, Action> = (prevState, action) => {
+  switch (action.type) {
+    case "Tick":
+      return [
+        {
+          ...prevState,
+          y: (action.frame.deltaTime / 1000) * prevState.vy + prevState.y,
+          x: (action.frame.deltaTime / 1000) * prevState.vx + prevState.x
+        },
+        EMPTY
+      ];
+  }
+};
+
+// RENDER
+
+export const render = ({
+  state,
+  ctx
 }: {
-  canvasHeight: number;
-  canvasWidth: number;
+  state: State;
+  ctx: CanvasRenderingContext2D;
 }) => {
-  const stillState: State = {
-    x: canvasWidth / 2 - ballSize / 2,
-    y: canvasHeight / 2 - ballSize / 2,
-    vx: 0,
-    vy: 0
-  };
-
-  const getInitialMovingState = (): State => ({
-    x: canvasWidth / 2 - ballSize / 2,
-    y: canvasHeight / 2 - ballSize / 2,
-    vx: getHorizontalSpeed(),
-    vy: getVerticalSpeed()
-  });
-
-  const tickReducer = (prevState: State, frame: Frame): State => ({
-    ...prevState,
-    y: (frame.deltaTime / 1000) * prevState.vy + prevState.y,
-    x: (frame.deltaTime / 1000) * prevState.vx + prevState.x
-  });
-
-  const render = ({
-    state,
-    ctx
-  }: {
-    state: State;
-    ctx: CanvasRenderingContext2D;
-  }) => {
-    ctx.fillStyle = "white";
-    ctx.fillRect(state.x, state.y, ballSize, ballSize);
-  };
-
-  return {
-    stillState,
-    getInitialMovingState,
-    tickReducer,
-    render
-  };
+  ctx.fillStyle = "white";
+  ctx.fillRect(state.x, state.y, ballSize, ballSize);
 };
