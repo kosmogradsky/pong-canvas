@@ -1,12 +1,5 @@
-import { fromEvent, EMPTY as RX_EMPTY, combineLatest, interval } from "rxjs";
-import {
-  filter,
-  ignoreElements,
-  tap,
-  switchMap,
-  map,
-  take
-} from "rxjs/operators";
+import { fromEvent, combineLatest } from "rxjs";
+import { filter, ignoreElements, tap, switchMap, map } from "rxjs/operators";
 import { ajax } from "rxjs/ajax";
 import * as Paddle from "./Paddle";
 import * as Ball from "./Ball";
@@ -25,6 +18,7 @@ import {
   Effect,
   AnyAction
 } from "sudetenwaltz/Loop";
+import * as Time from "sudetenwaltz/Time";
 import PixiSound from "pixi-sound";
 
 // CONSTANTS
@@ -277,7 +271,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
           new Batch([
             paddleEffects,
             new PlaySound("score"),
-            new Timeout(1000, { type: "DecrementCount" })
+            new Time.SetTimeout(1000, () => ({ type: "DecrementCount" }))
           ])
         ];
       }
@@ -319,7 +313,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
           new Batch([
             paddleEffects,
             new PlaySound("score"),
-            new Timeout(1000, { type: "DecrementCount" })
+            new Time.SetTimeout(1000, () => ({ type: "DecrementCount" }))
           ])
         ];
       }
@@ -501,7 +495,7 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
               },
               ball: Ball.getInitialMovingState(height, width)
             },
-            new Timeout(1000, { type: "DecrementCount" })
+            new Time.SetTimeout(1000, () => ({ type: "DecrementCount" }))
           ]
         : [prevState, EMPTY];
     }
@@ -524,7 +518,7 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
             ...prevState,
             count: prevState.count - 1
           },
-          new Timeout(1000, { type: "DecrementCount" })
+          new Time.SetTimeout(1000, () => ({ type: "DecrementCount" }))
         ];
       }
 
@@ -540,16 +534,6 @@ class PlaySound extends SilentEff {
 
   constructor(readonly sound: "paddleHit" | "score" | "wallHit") {
     super();
-  }
-}
-
-class Timeout<A extends AnyAction> implements Effect<A> {
-  readonly type = "Timeout";
-
-  constructor(readonly ms: number, readonly action: A) {}
-
-  map<B extends AnyAction>(mapper: (from: A) => B): Timeout<B> {
-    return new Timeout(this.ms, mapper(this.action));
   }
 }
 
@@ -586,18 +570,9 @@ const soundEpic: Epic<Action> = effect$ =>
     )
   );
 
-const timeEpic: Epic<Action> = effect$ =>
-  effect$.pipe(
-    ofType<Timeout<Action>>("Timeout"),
-    switchMap(({ ms, action }) =>
-      interval(ms).pipe(
-        take(1),
-        map(() => action)
-      )
-    )
-  );
-
-const epic = combineEpics(soundEpic, timeEpic);
+const epic: Epic<Action> = combineEpics<Action>(soundEpic, Time.epic as Epic<
+  Action
+>);
 
 const store = createGameStore(initialLoop, reducer, epic);
 

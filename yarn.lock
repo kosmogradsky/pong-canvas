@@ -7164,10 +7164,10 @@ strip-json-comments@~2.0.1:
   resolved "https://registry.yarnpkg.com/strip-json-comments/-/strip-json-comments-2.0.1.tgz#3c531942e908c2697c0ec344858c286c7ca0a60a"
   integrity sha1-PFMZQukIwml8DsNEhYwobHygpgo=
 
-sudetenwaltz@^4.2.0:
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/sudetenwaltz/-/sudetenwaltz-4.2.0.tgz#a7bb8da621681677503f427c8c2268685d6b6b93"
-  integrity sha512-AkzplEM1huu8yU5vksASpV/ABPjWIsGNBtSL9TFryyCibBMyf4IOWukOM6hNz2fzZiJxVKEv/nOc/BZ9P4RHJg==
+sudetenwaltz@^4.3.0:
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/sudetenwaltz/-/sudetenwaltz-4.3.0.tgz#67cd1c8bb8dbc771f55fb8f53b856cf96334fc41"
+  integrity sha512-1wAHD+WvrA9yt77uy/ROc6c4d4VzLTsh7Km7MgNEoeRXD5WkxkstMHr+RHuZszl7ptidXJJSQJnSwMyOaF8GGw==
 
 supports-color@6.1.0, supports-color@^6.1.0:
   version "6.1.0"
