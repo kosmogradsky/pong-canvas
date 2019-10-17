@@ -1,5 +1,13 @@
-import { fromEvent, EMPTY as RX_EMPTY } from "rxjs";
-import { filter, ignoreElements, tap } from "rxjs/operators";
+import { fromEvent, EMPTY as RX_EMPTY, combineLatest, interval } from "rxjs";
+import {
+  filter,
+  ignoreElements,
+  tap,
+  switchMap,
+  map,
+  take
+} from "rxjs/operators";
+import { ajax } from "rxjs/ajax";
 import * as Paddle from "./Paddle";
 import * as Ball from "./Ball";
 import {
@@ -12,16 +20,12 @@ import {
   mapLoop,
   Epic,
   ofType,
-  SilentEff
+  SilentEff,
+  combineEpics,
+  Effect,
+  AnyAction
 } from "sudetenwaltz/Loop";
 import PixiSound from "pixi-sound";
-
-const paddleHit = PixiSound.Sound.from({
-  url: "./paddle_hit.wav",
-  preload: true
-});
-const score = PixiSound.Sound.from({ url: "./score.wav", preload: true });
-const wallHit = PixiSound.Sound.from({ url: "./wall_hit.wav", preload: true });
 
 // CONSTANTS
 
@@ -77,7 +81,22 @@ interface PlayingState {
   ball: Ball.State;
 }
 
-type State = WelcomeState | PlayingState | WonState;
+interface CountdownState {
+  type: "CountdownState";
+  count: number;
+  whoPasses: "right" | "left" | "neutral";
+  left: {
+    paddle: Paddle.State;
+    score: number;
+  };
+  right: {
+    paddle: Paddle.State;
+    score: number;
+  };
+  ball: Ball.State;
+}
+
+type State = WelcomeState | PlayingState | WonState | CountdownState;
 
 // INITIAL STATE
 
@@ -111,11 +130,25 @@ interface Start {
   type: "Start";
 }
 
-type Action = LeftPaddleMsg | RightPaddleMsg | BallMsg | Start;
+interface DecrementCount {
+  type: "DecrementCount";
+}
+
+type Action = LeftPaddleMsg | RightPaddleMsg | BallMsg | Start | DecrementCount;
 
 // REDUCER
 
 const paddleReducer = Paddle.createReducer(height);
+
+const getLeftServe = (leftPaddleY: number) => ({
+  x: leftPaddleX + Paddle.paddleWidth,
+  y: leftPaddleY + Paddle.paddleHeight / 2 - Ball.ballSize / 2
+});
+
+const getRightServe = (rightPaddleY: number) => ({
+  x: rightPaddleX - Ball.ballSize,
+  y: rightPaddleY + Paddle.paddleHeight / 2 - Ball.ballSize / 2
+});
 
 const tickReducer: TickReducer<State, never, State, Action> = (
   prevState,
@@ -123,7 +156,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
 ) => {
   const [leftPaddleState, leftPaddleEffect] = mapEffect(
     paddleReducer(
-      prevState.type === "PlayingState"
+      prevState.type === "PlayingState" || prevState.type === "CountdownState"
         ? prevState.left.paddle
         : prevState.left,
       action
@@ -135,7 +168,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
   );
   const [rightPaddleState, rightPaddleEffect] = mapEffect(
     paddleReducer(
-      prevState.type === "PlayingState"
+      prevState.type === "PlayingState" || prevState.type === "CountdownState"
         ? prevState.right.paddle
         : prevState.right,
       action
@@ -172,6 +205,40 @@ const tickReducer: TickReducer<State, never, State, Action> = (
         paddleEffects
       ];
     }
+    case "CountdownState": {
+      const getBallState = () => {
+        switch (prevState.whoPasses) {
+          case "left":
+            return {
+              ...prevState.ball,
+              ...getLeftServe(leftPaddleState.y)
+            };
+          case "right":
+            return {
+              ...prevState.ball,
+              ...getRightServe(rightPaddleState.y)
+            };
+          case "neutral":
+            return prevState.ball;
+        }
+      };
+
+      return [
+        {
+          ...prevState,
+          left: {
+            ...prevState.left,
+            paddle: leftPaddleState
+          },
+          right: {
+            ...prevState.right,
+            paddle: rightPaddleState
+          },
+          ball: getBallState()
+        },
+        paddleEffects
+      ];
+    }
     case "PlayingState": {
       if (prevState.ball.x < 0) {
         const nextRightScore = prevState.right.score + 1;
@@ -184,13 +251,15 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               left: leftPaddleState,
               right: rightPaddleState
             },
-            new Batch([paddleEffects, new PlaySound(score)])
+            new Batch([paddleEffects, new PlaySound("score")])
           ];
         }
 
         return [
           {
-            type: "PlayingState",
+            type: "CountdownState",
+            whoPasses: "left",
+            count: 3,
             left: {
               paddle: leftPaddleState,
               score: prevState.left.score
@@ -202,14 +271,14 @@ const tickReducer: TickReducer<State, never, State, Action> = (
             ball: {
               vx: Ball.horizontalSpeedThreshold,
               vy: Ball.getVerticalSpeed(),
-              x: leftPaddleX + Paddle.paddleWidth,
-              y:
-                prevState.left.paddle.y +
-                Paddle.paddleHeight / 2 -
-                Ball.ballSize / 2
+              ...getLeftServe(prevState.left.paddle.y)
             }
           },
-          new Batch([paddleEffects, new PlaySound(score)])
+          new Batch([
+            paddleEffects,
+            new PlaySound("score"),
+            new Timeout(1000, { type: "DecrementCount" })
+          ])
         ];
       }
 
@@ -224,13 +293,15 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               left: leftPaddleState,
               right: rightPaddleState
             },
-            new Batch([paddleEffects, new PlaySound(score)])
+            new Batch([paddleEffects, new PlaySound("score")])
           ];
         }
 
         return [
           {
-            type: "PlayingState",
+            type: "CountdownState",
+            whoPasses: "right",
+            count: 3,
             left: {
               paddle: leftPaddleState,
               score: nextLeftScore
@@ -242,14 +313,14 @@ const tickReducer: TickReducer<State, never, State, Action> = (
             ball: {
               vx: -Ball.horizontalSpeedThreshold,
               vy: Ball.getVerticalSpeed(),
-              x: rightPaddleX - Ball.ballSize,
-              y:
-                prevState.right.paddle.y +
-                Paddle.paddleHeight / 2 -
-                Ball.ballSize / 2
+              ...getRightServe(prevState.right.paddle.y)
             }
           },
-          new Batch([paddleEffects, new PlaySound(score)])
+          new Batch([
+            paddleEffects,
+            new PlaySound("score"),
+            new Timeout(1000, { type: "DecrementCount" })
+          ])
         ];
       }
 
@@ -272,7 +343,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               vx: -prevState.ball.vx * 1.03,
               x: rightPaddleX - Ball.ballSize
             },
-            new PlaySound(paddleHit)
+            new PlaySound("paddleHit")
           ];
         }
 
@@ -287,7 +358,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               vx: -prevState.ball.vx * 1.03,
               x: leftPaddleX + Paddle.paddleWidth
             },
-            new PlaySound(paddleHit)
+            new PlaySound("paddleHit")
           ];
         }
 
@@ -298,7 +369,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               vy: -prevState.ball.vy,
               y: 0
             },
-            new PlaySound(wallHit)
+            new PlaySound("wallHit")
           ];
         }
 
@@ -309,7 +380,7 @@ const tickReducer: TickReducer<State, never, State, Action> = (
               vy: -prevState.ball.vy,
               y: height - Ball.ballSize
             },
-            new PlaySound(wallHit)
+            new PlaySound("wallHit")
           ];
         }
 
@@ -348,13 +419,15 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
     case "LeftPaddleMsg": {
       return mapLoop(
         paddleReducer(
-          prevState.type === "PlayingState"
+          prevState.type === "PlayingState" ||
+            prevState.type === "CountdownState"
             ? prevState.left.paddle
             : prevState.left,
           action.action
         ),
         (leftPaddle): State =>
-          prevState.type === "PlayingState"
+          prevState.type === "PlayingState" ||
+          prevState.type === "CountdownState"
             ? {
                 ...prevState,
                 left: {
@@ -375,13 +448,15 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
     case "RightPaddleMsg": {
       return mapLoop(
         paddleReducer(
-          prevState.type === "PlayingState"
+          prevState.type === "PlayingState" ||
+            prevState.type === "CountdownState"
             ? prevState.right.paddle
             : prevState.right,
           action.action
         ),
         (rightPaddle): State =>
-          prevState.type === "PlayingState"
+          prevState.type === "PlayingState" ||
+          prevState.type === "CountdownState"
             ? {
                 ...prevState,
                 right: {
@@ -400,10 +475,11 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
       );
     }
     case "BallMsg": {
-      return prevState.type === "PlayingState"
+      return prevState.type === "PlayingState" ||
+        prevState.type === "CountdownState"
         ? mapLoop(
             Ball.reducer(prevState.ball, action.action),
-            (ball): PlayingState => ({ ...prevState, ball }),
+            (ball): PlayingState | CountdownState => ({ ...prevState, ball }),
             (ballAction): BallMsg => ({ type: "BallMsg", action: ballAction })
           )
         : [prevState, EMPTY];
@@ -412,7 +488,9 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
       return prevState.type === "WelcomeState" || prevState.type === "WonState"
         ? [
             {
-              type: "PlayingState",
+              type: "CountdownState",
+              whoPasses: "neutral",
+              count: 3,
               left: {
                 paddle: prevState.left,
                 score: 0
@@ -423,9 +501,34 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
               },
               ball: Ball.getInitialMovingState(height, width)
             },
-            EMPTY
+            new Timeout(1000, { type: "DecrementCount" })
           ]
         : [prevState, EMPTY];
+    }
+    case "DecrementCount": {
+      if (prevState.type === "CountdownState") {
+        if (prevState.count === 1) {
+          return [
+            {
+              type: "PlayingState",
+              left: prevState.left,
+              right: prevState.right,
+              ball: prevState.ball
+            },
+            EMPTY
+          ];
+        }
+
+        return [
+          {
+            ...prevState,
+            count: prevState.count - 1
+          },
+          new Timeout(1000, { type: "DecrementCount" })
+        ];
+      }
+
+      return [prevState, EMPTY];
     }
   }
 };
@@ -435,17 +538,66 @@ const reducer: TickReducer<State, Action> = (prevState, action) => {
 class PlaySound extends SilentEff {
   readonly type = "PlaySound";
 
-  constructor(readonly sound: PixiSound.Sound) {
+  constructor(readonly sound: "paddleHit" | "score" | "wallHit") {
     super();
   }
 }
 
-const epic: Epic<Action> = effect$ =>
-  effect$.pipe(
-    ofType<PlaySound>("PlaySound"),
-    tap(({ sound }) => sound.play()),
-    ignoreElements()
+class Timeout<A extends AnyAction> implements Effect<A> {
+  readonly type = "Timeout";
+
+  constructor(readonly ms: number, readonly action: A) {}
+
+  map<B extends AnyAction>(mapper: (from: A) => B): Timeout<B> {
+    return new Timeout(this.ms, mapper(this.action));
+  }
+}
+
+const loadSound = (url: string) =>
+  ajax({ url, responseType: "arraybuffer" }).pipe(
+    map(({ response }) => PixiSound.Sound.from({ source: response }))
   );
+
+const soundEpic: Epic<Action> = effect$ =>
+  combineLatest([
+    loadSound("./paddle_hit.wav"),
+    loadSound("./score.wav"),
+    loadSound("./wall_hit.wav")
+  ]).pipe(
+    switchMap(([paddleHit, score, wallHit]) =>
+      effect$.pipe(
+        ofType<PlaySound>("PlaySound"),
+        tap(({ sound }) => {
+          const getSoundInstance = (): PixiSound.Sound => {
+            switch (sound) {
+              case "paddleHit":
+                return paddleHit;
+              case "score":
+                return score;
+              case "wallHit":
+                return wallHit;
+            }
+          };
+
+          getSoundInstance().play();
+        }),
+        ignoreElements()
+      )
+    )
+  );
+
+const timeEpic: Epic<Action> = effect$ =>
+  effect$.pipe(
+    ofType<Timeout<Action>>("Timeout"),
+    switchMap(({ ms, action }) =>
+      interval(ms).pipe(
+        take(1),
+        map(() => action)
+      )
+    )
+  );
+
+const epic = combineEpics(soundEpic, timeEpic);
 
 const store = createGameStore(initialLoop, reducer, epic);
 
@@ -558,6 +710,33 @@ store.model$.subscribe(state => {
 
       const rightScore = state.right.score.toString();
       ctx.fillText(rightScore, width / 2 + 100, 80);
+
+      break;
+    }
+    case "CountdownState": {
+      Paddle.render({ ctx, x: leftPaddleX, state: state.left.paddle });
+      Paddle.render({
+        ctx,
+        x: rightPaddleX,
+        state: state.right.paddle
+      });
+
+      Ball.render({ ctx, state: state.ball });
+
+      ctx.font = "3rem 'Press Start 2P', sans-serif";
+
+      const leftScore = state.left.score.toString();
+      const leftScoreWidth = ctx.measureText(leftScore).width;
+      ctx.fillText(leftScore, width / 2 - 100 - leftScoreWidth, 80);
+
+      const rightScore = state.right.score.toString();
+      ctx.fillText(rightScore, width / 2 + 100, 80);
+
+      ctx.font = "5rem 'Press Start 2P', sans-serif";
+
+      const count = state.count.toString();
+      const countWidth = ctx.measureText(count).width;
+      ctx.fillText(state.count.toString(), width / 2 - countWidth / 2, 200);
 
       break;
     }

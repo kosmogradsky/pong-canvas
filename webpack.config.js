@@ -8,6 +8,8 @@ module.exports = {
   mode: "development",
   entry: "./src/index.ts",
 
+  devtool: "eval-source-map",
+
   output: {
     filename: "[name].[chunkhash].js",
     path: path.resolve(__dirname, "dist")

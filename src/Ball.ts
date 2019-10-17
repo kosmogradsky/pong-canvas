@@ -8,7 +8,7 @@ export interface State {
 }
 
 export const ballSize = 20;
-export const horizontalSpeedThreshold = 300;
+export const horizontalSpeedThreshold = 500;
 export const getVerticalSpeed = () => Math.floor(Math.random() * 500) - 250;
 export const getHorizontalSpeed = () =>
   Math.ceil(Math.random() * 2) == 1
